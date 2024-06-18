@@ -27,9 +27,9 @@ async function bootstrap() {
 
 bootstrap().then(() => {
   console.info(`
-     ------------
-     Internal Application Started!
-     API: http://localhost:${port}/v1
-     ------------
+    ------------
+    Internal Application Started!
+    API: http://localhost:${port}/v1
+    ------------
 `);
 });
