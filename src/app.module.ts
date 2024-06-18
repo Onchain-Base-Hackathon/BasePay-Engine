@@ -1,10 +1,18 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Configs } from './constants/config.enum';
 import { MongooseModule } from '@nestjs/mongoose';
-import { PaystackPaymentProvider } from './providers/payment/paystack/paystack.payment';
+import { BasecanExplorerProvider, PaystackPaymentProvider } from './providers';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { ErrorInterceptor, HttpExceptionFilter } from './util';
+import { UserModule } from './api/user/user.module';
+import { TransactionModule } from './api';
+import { PaymentModule } from './api/payment/payment.module';
 
+const globalProviders = [PaystackPaymentProvider, BasecanExplorerProvider];
+
+@Global()
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -17,8 +25,23 @@ import { PaystackPaymentProvider } from './providers/payment/paystack/paystack.p
         };
       },
     }),
+    UserModule,
+    TransactionModule,
+    PaymentModule,
   ],
   controllers: [AppController],
-  providers: [PaystackPaymentProvider],
+  providers: [
+    ...globalProviders,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ErrorInterceptor,
+    },
+
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
+  ],
+  exports: [...globalProviders],
 })
 export class AppModule {}
