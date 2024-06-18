@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { Configs } from './constants/config.enum';
 import { ValidationPipe } from '@nestjs/common';
+import morgan = require('morgan');
+import helmet from 'helmet';
 
 let port: number;
 async function bootstrap() {
@@ -11,6 +13,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
+      disableErrorMessages: false,
     }),
   );
 
@@ -19,17 +22,25 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.setGlobalPrefix('v1');
+  app.setGlobalPrefix('api');
+
+  app.use(morgan('dev'));
+  app.use(
+    helmet({
+      contentSecurityPolicy: undefined,
+      crossOriginEmbedderPolicy: undefined,
+    }),
+  );
 
   port = configService.get(Configs.PORT);
-  await app.listen(3000);
+  await app.listen(port);
 }
 
 bootstrap().then(() => {
   console.info(`
      ------------
      Internal Application Started!
-     API: http://localhost:${port}/v1
+     API: http://localhost:${port}/api
      ------------
 `);
 });

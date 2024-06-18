@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Configs } from 'src/constants/config.enum';
-import crypto from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 import {
   CompleteCheckoutTransactionDto,
   InitializeFundWithFiatTransactionDto,
@@ -22,10 +22,9 @@ import {
   TransactionType,
 } from 'src/schemas/transaction.schema';
 import { Model } from 'mongoose';
-import {
-  BasecanExplorerProvider,
-  PaystackPaymentProvider,
-} from 'src/providers';
+import { PaystackPaymentProvider } from 'src/providers';
+import { EthereumProvider } from 'src/providers';
+import { ethers } from 'ethers';
 
 @Injectable()
 export class TransactionService {
@@ -34,7 +33,7 @@ export class TransactionService {
     @InjectModel(TRANSACTION_MODEL)
     private readonly transactionModel: Model<ITransactionBase & ICheckout>,
     private readonly paystackPaymentProvider: PaystackPaymentProvider,
-    private readonly basecanExplorerProvider: BasecanExplorerProvider,
+    private readonly ethereumProvider: EthereumProvider,
   ) {}
 
   async initializeTransaction(address: string, dto: InitializeTransactionDto) {
@@ -77,7 +76,14 @@ export class TransactionService {
   async initializeFundWithFiatTransaction(
     dto: InitializeFundWithFiatTransactionDto,
   ) {
-    let { amount, paymentProvider, callbackUrl, reference, address } = dto;
+    let {
+      amount,
+      paymentProvider,
+      callbackUrl,
+      reference,
+      address,
+      cryptoAmount,
+    } = dto;
 
     // set default values
     callbackUrl = callbackUrl || '';
@@ -95,7 +101,7 @@ export class TransactionService {
     const metadata = {
       type: 'FundWallet',
       address,
-      tnxId: transaction._id,
+      cryptoAmount,
     };
 
     const paystackPayload: PaystackTransactionPayload = {
@@ -105,7 +111,6 @@ export class TransactionService {
       metadata: metadata,
       currency: 'NGN',
       callback_url: callbackUrl,
-      channels: [],
     };
 
     const response = await this.paystackPaymentProvider.init(paystackPayload);
@@ -118,7 +123,8 @@ export class TransactionService {
   }
 
   async updateTxStatus(dto: CompleteCheckoutTransactionDto) {
-    const { reference, txHash } = dto;
+    const { reference, txHash, fromAddress } = dto;
+    let { status: txStatus } = dto;
 
     const transaction = await this.transactionModel.findOne({
       reference,
@@ -129,26 +135,52 @@ export class TransactionService {
       throw new NotFoundException('Transaction not found');
     }
 
-    if (transaction.status === TransactionStatus.COMPLETED)
+    if (transaction.status === TransactionStatus.SUCCESSFUL)
       throw new BadRequestException('Transaction already completed');
 
-    // check txHash
-    const receipt = await this.basecanExplorerProvider.getTxReceipt(txHash);
+    let updatedTransaction;
+    switch (txStatus) {
+      case TransactionStatus.SUCCESSFUL: {
+        const provider =
+          this.ethereumProvider.getProviderOrSigner<ethers.AbstractProvider>();
+        const txResponse = await provider.getTransaction(txHash);
 
-    let status = TransactionStatus.COMPLETED;
-    if (receipt.result.status !== 1) {
-      status = TransactionStatus.FAILED;
+        if (
+          transaction.toAddress !== txResponse.to ||
+          fromAddress !== txResponse.from
+        ) {
+          txStatus = TransactionStatus.FAILED;
+        }
+
+        // update transaction
+        updatedTransaction = await this.transactionModel.findByIdAndUpdate(
+          transaction._id,
+          {
+            status: txStatus,
+            txHash,
+          },
+          { new: true },
+        );
+
+        break;
+      }
+      case TransactionStatus.FAILED: {
+        updatedTransaction = await this.transactionModel.findByIdAndUpdate(
+          transaction._id,
+          {
+            status: txStatus,
+            txHash,
+          },
+          { new: true },
+        );
+
+        break;
+      }
+      default:
+        throw new BadRequestException('Invalid status');
     }
 
-    // update transaction
-    const updatedTransaction = await this.transactionModel.findByIdAndUpdate(
-      transaction._id,
-      {
-        status,
-        txHash: txHash,
-      },
-      { new: true },
-    );
+    ///TODO: send webhook / email / inapp
 
     return {
       message: 'Transaction updated successfully',
@@ -157,12 +189,29 @@ export class TransactionService {
     };
   }
 
+  async getPoolBalance() {
+    const provider =
+      this.ethereumProvider.getProviderOrSigner<ethers.AbstractProvider>();
+
+    const balance = await provider.getBalance(
+      this.configService.get(Configs.POOL_WALLET_ADDRESS),
+    );
+
+    return {
+      message: 'Pool balance fetched successfully',
+      success: true,
+      data: ethers.formatEther(balance),
+    };
+  }
+
   //////////////////////////////
   // Webhooks
   //////////////////////////////
   async paystackWebhook(dto: WebhookDto<any>, headers) {
-    const hash = crypto
-      .createHmac('sha512', this.configService.get(Configs.PAYSTACK_SECRET_KEY))
+    const hash = createHmac(
+      'sha512',
+      this.configService.get(Configs.PAYSTACK_SECRET_KEY),
+    )
       .update(JSON.stringify(dto))
       .digest('hex');
 
@@ -170,14 +219,15 @@ export class TransactionService {
 
     if (dto.event === 'charge.success') {
       switch (dto.data.metadata.type) {
-        case 'FundWallet':
+        case 'FundWallet': {
           const payload = {
             address: dto.data.metadata.address,
+            amount: dto.data.metadata.cryptoAmount,
             reference: dto.data.reference,
-            amount: dto.data.amount / 100,
           };
           await this.handleWalletFund(payload);
           break;
+        }
       }
     }
 
@@ -188,14 +238,41 @@ export class TransactionService {
   // Utilities
   //////////////////////////////
   private generateRandomReference() {
-    return crypto.randomBytes(16).toString('hex');
+    return randomBytes(16).toString('hex');
   }
 
-  private async handleWalletFund(dto: {
-    address: string;
-    reference: string;
-    amount: number;
-  }) {
+  private async handleWalletFund(data: any) {
+    // get transaction
+    const transaction = await this.transactionModel.findOne({
+      reference: data.reference,
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    // update transaction
+    await this.transactionModel.findOneAndUpdate(
+      {
+        reference: data.reference,
+      },
+      {
+        status: TransactionStatus.SUCCESSFUL,
+      },
+      { new: true },
+    );
+
+    // send crypto to wallet
+    const signer =
+      this.ethereumProvider.getProviderOrSigner<ethers.Wallet>(true);
+
+    const tx = await signer.sendTransaction({
+      to: data.address,
+      value: ethers.parseEther(data.amount.toString()),
+    });
+
+    await tx.wait();
+
     return {
       message: 'Wallet funded successfully',
     };

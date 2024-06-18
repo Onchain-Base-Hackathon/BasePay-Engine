@@ -20,6 +20,8 @@ export class UserGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const username = this.extractUsernameFromHeader(request);
 
+    console.log('username', username);
+
     if (!username)
       throw new UnauthorizedException('Authorization header not found');
 

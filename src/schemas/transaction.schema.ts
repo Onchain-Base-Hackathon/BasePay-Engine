@@ -3,8 +3,8 @@ import { PAYMENT_MODEL } from 'src/constants';
 
 export enum TransactionStatus {
   PENDING = 'PENDING',
-  COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
+  SUCCESSFUL = 'SUCCESSFUL',
 }
 
 export enum TransactionType {

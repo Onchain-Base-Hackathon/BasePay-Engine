@@ -7,7 +7,10 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { PaymentProvider } from 'src/schemas/transaction.schema';
+import {
+  PaymentProvider,
+  TransactionStatus,
+} from 'src/schemas/transaction.schema';
 
 export class WebhookDto<T> {
   @IsString()
@@ -43,6 +46,9 @@ export class InitializeFundWithFiatTransactionDto {
   @IsNumber()
   amount: number;
 
+  @IsString()
+  cryptoAmount: string;
+
   @IsEnum(PaymentProvider)
   paymentProvider: PaymentProvider;
 
@@ -66,6 +72,14 @@ export class CompleteCheckoutTransactionDto {
   @IsString()
   @IsNotEmpty()
   txHash: string;
+
+  @IsEnum(TransactionStatus)
+  @IsNotEmpty()
+  status: TransactionStatus;
+
+  @IsOptional()
+  @IsString()
+  fromAddress: string;
 }
 
 export type PaystackTransactionPayload = {
