@@ -12,7 +12,7 @@ import { PaymentModule } from './api/payment/payment.module';
 import { EthereumProvider } from './providers/ethereum.provider';
 import { Encryptor } from './util/encryption';
 
-const globalProviders = [PaystackPaymentProvider, EthereumProvider];
+const globalProviders = [PaystackPaymentProvider, EthereumProvider, Encryptor];
 
 @Global()
 @Module({
@@ -42,11 +42,6 @@ const globalProviders = [PaystackPaymentProvider, EthereumProvider];
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
-    },
-
-    {
-      provide: APP_ENCRYPTOR,
-      useClass: Encryptor,
     },
   ],
   exports: [...globalProviders],
