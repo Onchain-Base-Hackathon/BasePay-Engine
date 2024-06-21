@@ -5,6 +5,7 @@ import {
   Headers,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
@@ -70,5 +71,20 @@ export class TransactionController {
         status: true,
       };
     }
+  }
+
+  @Get('user-transactions')
+  @UseGuards(UserGuard)
+  async getUserTransactions(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @GetUser('address') address: string,
+  ) {
+    const data = await this.transactionService.getUserTransactions(
+      page,
+      limit,
+      address,
+    );
+    return data;
   }
 }
