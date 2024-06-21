@@ -18,13 +18,26 @@ export class UserService {
     const { address } = dto;
     let user = await this.userModel.findOne({ address });
     if (!user) {
-      const apiKey = await this.encryptor.hashText(address);
+      const apiKey = this.encryptor.hashText(address);
       user = await this.userModel.create({ address, apiKey });
     }
     return {
       message: 'Wallet connected successfully',
       success: true,
-      data: { user },
+      data: user,
+    };
+  }
+
+  async addWebhookUrl(webhookUrl: string, address: string) {
+    const user = await this.userModel.findOneAndUpdate(
+      { address },
+      { webhookUrl },
+      { new: true },
+    );
+    return {
+      message: 'Webhook url added successfully',
+      success: true,
+      data: user,
     };
   }
 }
