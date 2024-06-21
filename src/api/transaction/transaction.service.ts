@@ -217,9 +217,6 @@ export class TransactionService {
       .limit(limit)
       .exec();
     const total = await this.transactionModel.countDocuments();
-    if (!transactions) {
-      throw new BadRequestException('No transaction');
-    }
     return {
       message: 'User transactions',
       success: true,

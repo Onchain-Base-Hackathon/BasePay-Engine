@@ -18,10 +18,8 @@ export class UserService {
     const { address } = dto;
     let user = await this.userModel.findOne({ address });
     if (!user) {
-      const apiKey = this.encryptor.encrypt(address);
+      const apiKey = await this.encryptor.hashText(address);
       user = await this.userModel.create({ address, apiKey });
-      if (!user)
-        throw new BadRequestException('Failed to connect wallet, please retry');
     }
     return {
       message: 'Wallet connected successfully',
