@@ -10,8 +10,9 @@ import { UserModule } from './api/user/user.module';
 import { TransactionModule } from './api';
 import { PaymentModule } from './api/payment/payment.module';
 import { EthereumProvider } from './providers/ethereum.provider';
+import { Encryptor } from './util/encryption';
 
-const globalProviders = [PaystackPaymentProvider, EthereumProvider];
+const globalProviders = [PaystackPaymentProvider, EthereumProvider, Encryptor];
 
 @Global()
 @Module({

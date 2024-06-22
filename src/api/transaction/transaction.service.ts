@@ -205,6 +205,33 @@ export class TransactionService {
   }
 
   //////////////////////////////
+  // User Transactions
+  //////////////////////////////
+  async getUserTransactions(page: number, limit: number, address: string) {
+    const skip = (page - 1) * limit;
+    const transactions = await this.transactionModel
+      .find({
+        toAddress: address,
+      })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+    const total = await this.transactionModel.countDocuments();
+    return {
+      message: 'User transactions',
+      success: true,
+      data: {
+        transactions,
+        meta: {
+          page,
+          limit,
+          total,
+        },
+      },
+    };
+  }
+
+  //////////////////////////////
   // Webhooks
   //////////////////////////////
   async paystackWebhook(dto: WebhookDto<any>, headers) {
