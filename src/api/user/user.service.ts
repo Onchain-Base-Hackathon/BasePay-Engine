@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { CreateUserDto } from './dto';
 import { Model } from 'mongoose';
 import { IUser } from 'src/schemas/user.schema';
